@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shodan Search Report</title>
+    <style>
+        .close {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Shodan Search Results</h1>
+    {% for result in results %}
+        <h2>Query: {{ result.query }} ({{ result.count }} results)</h2>
+        <table border="1">
+            <tr>
+                <th>IP</th>
+                <th>Port</th>
+                <th>Org</th>
+                <th>Hostnames</th>
+                <th>Country</th>
+                <th>Banner</th>
+                <th>Screenshot</th>
+            </tr>
+            {% for device in result.devices %}
+            <tr>
+                <td>{{ device.ip_str or '' }}</td>
+                <td>{{ device.port or '' }}</td>
+                <td>{{ device.org or '' }}</td>
+                <td>{{ device.hostnames or '' }}</td>
+                <td>{{ device.location or '' }}</td>
+                <td><pre>{{ device.data | e or '' }}</pre></td>
+                <td>
+                    {% if device.screenshot_url %}
+                        <img src="{{ device.screenshot_url }}" alt="Screenshot" width="200"/>
+                    {% else %}
+                        No image
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% endfor %}
+</body>
+</html>

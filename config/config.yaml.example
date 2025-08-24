@@ -1,0 +1,24 @@
+# =============================================================================
+# SHODAN IOT BRUTE FORCE TOOL - CONFIGURATION EXAMPLE
+# =============================================================================
+
+# Shodan API Configuration
+shodan_api_key: "TU_API_KEY_DE_SHODAN_AQUI"
+
+# Configuración adicional (opcional)
+settings:
+  max_results_per_query: 10000
+  default_timeout: 30
+  retry_attempts: 3
+  
+# =============================================================================
+# INSTRUCCIONES:
+#
+# 1. Copia este archivo como 'config.yaml' en el mismo directorio
+# 2. Obtén tu API key de Shodan desde: https://account.shodan.io/
+# 3. Reemplaza "TU_API_KEY_DE_SHODAN_AQUI" con tu clave real
+# 4. ¡NUNCA subas config.yaml a repositorios públicos!
+#
+# Ejemplo:
+# shodan_api_key: "abcd1234efgh5678ijkl9012mnop3456"
+# =============================================================================
