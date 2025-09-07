@@ -430,7 +430,7 @@ def execute_attacks(filtered_by_port, username_list, password_list, wordlist_nam
     print(f"✅ Successful: {successful_attacks}")
     print(f"📈 Success rate: {(successful_attacks/total_selected)*100:.1f}%" if total_selected > 0 else "0%")
     print(f"🛠️  Tools used: FFUF (Web forms) + Hydra (Auth services)")
-    print(f"📏 Detection methods: Response size filtering + Authentication success")
+    print(f"📏 Detection methods: Response size filtering")
     
     # Mostrar credenciales exitosas
     if successful_credentials:

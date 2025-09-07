@@ -1,25 +1,25 @@
-"""Configuration and constants management."""
+"""Configuration and constants management for the Shodan IoT/ICS Brute Force Tool."""
 
 from pathlib import Path
 
-# EXACTAMENTE como en original_main.py
+# Basic query options (free)
 AVAILABLE_QUERIES = {
     "1": "webcam",
     "2": "raspberrypi", 
     "3": "default-passwords",
     "4": "ics",
-    "5": "advanced"  # Nueva opción
+    "5": "advanced"
 }
 
-# Mapping for report names - EXACTO del original
+# Report filename mapping
 REPORT_NAMES = {
     "webcam": "webcam_report.html",
     "raspberrypi": "raspberrypi_report.html",
-    "default-passwords": "default_password_report.html",  # Cambiar aquí
+    "default-passwords": "default_password_report.html",
     "ics": "ics_report.html"
 }
 
-# Consultas avanzadas mejoradas específicas para España (SIN HONEYPOTS, CON PRODUCTOS Y CATEGORÍAS)
+# Advanced queries for Spain (uses credits)
 ADVANCED_QUERIES_ES = {
     "1": 'country:"ES" product:"schneider","siemens","rockwell","ge"',
     "2": 'country:"ES" product:"modbus","ethernet/ip","profinet","bacnet"', 
@@ -47,7 +47,7 @@ ADVANCED_QUERY_DESCRIPTIONS = {
     "6": "Equipos de red (MikroTik, Cisco, Ubiquiti, TP-Link)"
 }
 
-# Opciones de límite de resultados (ACTUALIZADO)
+# Result limit options
 RESULT_LIMITS = {
     "1": 100,
     "2": 300, 
@@ -55,17 +55,17 @@ RESULT_LIMITS = {
     "4": "custom"
 }
 
-# Costo estimado en créditos de Shodan para cada consulta (ACTUALIZADO)
+# Credit costs for advanced queries
 ADVANCED_QUERY_CREDITS = {
-    "1": 1,  # ICS específico por fabricante
-    "2": 1,  # Protocolos industriales específicos
-    "3": 1,  # SSH/Telnet sin screenshots
-    "4": 1,  # Cámaras IP por fabricante
-    "5": 2,  # Web admin interfaces (más costoso)
-    "6": 1   # Network equipment por fabricante
+    "1": 1,  # ICS systems
+    "2": 1,  # Industrial protocols
+    "3": 1,  # SSH/Telnet services
+    "4": 1,  # IP cameras
+    "5": 2,  # Web admin interfaces (more expensive)
+    "6": 1   # Network equipment
 }
 
-# NUEVO: Sistema de wordlists personalizados - EXACTO del original
+# Specialized wordlists for different device types
 WORDLISTS = {
     "1": {
         "name": "General IoT/Default",
@@ -100,22 +100,23 @@ WORDLISTS = {
 }
 
 def create_directories():
-    """Create necessary directories - EXACTO del original."""
+    """Create necessary directories for the application."""
     base_dir = Path(__file__).resolve().parents[1]
     (base_dir / "json_data").mkdir(exist_ok=True)
     (base_dir / "reports").mkdir(exist_ok=True)
+    (base_dir / "logs").mkdir(exist_ok=True)
 
 def estimate_credits_by_limit(limit):
-    """Estimate Shodan credits based on result limit - EXACTO del original."""
+    """Estimate Shodan credits needed based on result limit."""
     if limit <= 100:
-        return 0  # Primeros 100 resultados gratis
+        return 0  # First 100 results are free
     else:
-        # Cada 100 resultados adicionales = +1 crédito
-        additional_credits = (limit - 100 + 99) // 100  # Redondeo hacia arriba
+        # Each additional 100 results = +1 credit
+        additional_credits = (limit - 100 + 99) // 100  # Round up
         return additional_credits
 
 def calculate_total_cost(query_selection, result_limit):
-    """Calculate total cost for a query including base cost and limit cost - EXACTO del original."""
+    """Calculate total cost for a query including base cost and limit cost."""
     base_cost = ADVANCED_QUERY_CREDITS.get(query_selection, 1)
     limit_cost = estimate_credits_by_limit(result_limit)
     total_cost = base_cost + limit_cost

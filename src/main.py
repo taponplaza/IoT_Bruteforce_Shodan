@@ -1,4 +1,4 @@
-"""Main entry point for the application - COMPLETELY MODULAR."""
+"""Main entry point for the Shodan IoT/ICS Brute Force Tool."""
 
 import yaml
 import atexit
@@ -9,18 +9,16 @@ from query_manager import run_basic_queries, run_advanced_queries
 from logging_manager import setup_output_logging
 
 def main():
-    """Main entry point - FULLY MODULAR with output logging."""
+    """Main entry point with optional output logging."""
     
-    # Setup output logging FIRST
+    # Setup output logging first
     logger = setup_output_logging()
-    
-    # Register cleanup function
     atexit.register(lambda: logger.close())
     
     # Create necessary directories
     create_directories()
     
-    # Load config
+    # Load configuration
     base_dir = Path(__file__).resolve().parents[1]
     config_path = base_dir / "config" / "config.yaml"
     
@@ -53,14 +51,14 @@ def main():
     print("   └─ Analyze saved JSON files and run brute force")
     print()
     
-    # Get main selection
+    # Get user selection
     while True:
         main_choice = input("Select option (1-3): ")
         if main_choice in ["1", "2", "3"]:
             break
         print("Invalid selection. Please choose 1-3")
     
-    # Execute selected option using ONLY modular components
+    # Execute selected option
     print(f"\n🚀 Executing option {main_choice} using modular system...")
     
     try:
@@ -76,24 +74,12 @@ def main():
             print("📂 Loading data manager...")
             run_from_previous_results()
 
-        print("\n🎉 Execution completed using fully modular system!")
-        print("📋 Components used:")
-        print("   ├─ config_manager.py - Configuration and constants")
-        print("   ├─ query_manager.py - Shodan query execution") 
-        print("   ├─ data_manager.py - JSON data management")
-        print("   ├─ wordlist_manager.py - Credential wordlists")
-        print("   ├─ service_detector.py - Service detection")
-        print("   ├─ attack_executor.py - Brute force orchestration")
-        print("   ├─ brute_force.py - FFUF/Hydra attack execution")
-        print("   └─ logging_manager.py - Output logging")
+        print("\n🎉 Execution completed!")
         
     except KeyboardInterrupt:
         print("\n⚠️  Program interrupted by user")
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
-    finally:
-        # Logger cleanup will be handled by atexit
-        pass
 
 if __name__ == "__main__":
     main()

@@ -1,26 +1,27 @@
-"""Service detection ONLY for POST forms - FFUF optimized."""
+"""Service detection for POST forms (FFUF) and authentication services (Hydra)."""
 
 from web_analyzer import WebFormAnalyzer
 
 def detect_service_advanced(target):
     """
-    Detección de servicios para FFUF (POST forms) y Hydra (servicios de autenticación).
+    Detect services for FFUF (POST forms) and Hydra (authentication services).
+    Returns service type string or None if no compatible service found.
     """
     port = target['port']
     ip = target['ip_str']
     banner = target.get('banner', '').lower()
     product = target.get('product', '').lower()
     
-    # PASO 1: Detectar si es un servicio web (HTTP/HTTPS) - EXPANDIDO
+    # STEP 1: Detect web services (HTTP/HTTPS)
     is_web_service = False
     use_https = False
     
-    # Puertos web estándar
-    if port in [80, 443, 8080, 8443, 8000, 8888, 9443, 9000, 9090, 8081, 8082, 8008, 8888]:
+    # Standard web ports
+    if port in [80, 443, 8080, 8443, 8000, 8888, 9443, 9000, 9090, 8081, 8082, 8008]:
         is_web_service = True
         use_https = port in [443, 8443, 9443]
     
-    # Detectar por banner/producto si es servicio web
+    # Detect web service by banner/product
     elif any(web_indicator in banner for web_indicator in ['http', 'apache', 'nginx', 'iis', 'lighttpd', 'tomcat']):
         is_web_service = True
         use_https = 'https' in banner or 'ssl' in banner
@@ -31,33 +32,33 @@ def detect_service_advanced(target):
         use_https = 'https' in product or 'ssl' in product
         print(f"      🔍 Web service detected from product: {product[:50]}...")
     
-    # Si es servicio web, intentar detectar formularios POST
+    # If web service, try to detect POST forms
     if is_web_service:
         print(f"      🔍 Analyzing {ip}:{port} for POST forms (FFUF) - {'HTTPS' if use_https else 'HTTP'}")
         
-        # Analizar formularios web
+        # Analyze web forms
         web_analyzer = WebFormAnalyzer()
         form_info = web_analyzer.analyze_website(ip, port, use_ssl=use_https)
         
         if form_info and form_info['method'].lower() == 'post':
-            # Formulario POST encontrado - usar FFUF
+            # POST form found - use FFUF
             form_path = form_info['action'].replace(form_info['base_url'], '')
             if not form_path:
                 form_path = "/"
                 
-            # Limpiar path de caracteres problemáticos
+            # Clean path of problematic characters
             if '?' in form_path:
                 form_path = form_path.split('?')[0]
                 
-            # Formato específico para FFUF
+            # Return FFUF format
             return f"ffuf-post-form:{form_path}:{form_info['username_field']}:{form_info['password_field']}"
         else:
             print(f"      ℹ️  Web service found but no POST forms detected")
     
-    # PASO 2: Detectar servicios compatibles con Hydra (SOLO autenticación real)
+    # STEP 2: Detect Hydra-compatible services (authentication only)
     print(f"      🔍 Analyzing {ip}:{port} for Hydra services")
     
-    # Mapeo de puertos a servicios Hydra - SOLO servicios con autenticación real
+    # Port to service mapping for Hydra
     hydra_services = {
         21: "ftp",
         22: "ssh", 
@@ -68,8 +69,8 @@ def detect_service_advanced(target):
         993: "imaps",
         995: "pop3s",
         1433: "mssql",
-        2222: "ssh",  # SSH alternativo
-        2323: "telnet", # Telnet alternativo
+        2222: "ssh",      # Alternative SSH
+        2323: "telnet",   # Alternative Telnet
         3306: "mysql",
         3389: "rdp",
         5432: "postgres",
@@ -78,17 +79,17 @@ def detect_service_advanced(target):
         27017: "mongodb"
     }
     
-    # Detectar por puerto conocido (pero no si ya determinamos que es web)
+    # Detect by known port (but not if already determined to be web)
     if port in hydra_services and not is_web_service:
         service = hydra_services[port]
         print(f"      ✅ Hydra service: {service}")
         return f"hydra:{service}"
     
-    # Detectar por banner o información adicional
+    # Detect by banner or product information
     if 'ssh' in banner or 'openssh' in product:
         print(f"      ✅ Hydra service: ssh (detected from banner)")
         return "hydra:ssh"
-    elif ('ftp' in banner or 'ftp' in product) and not is_web_service:  # FTP real, no confundir con HTTP
+    elif ('ftp' in banner or 'ftp' in product) and not is_web_service:
         print(f"      ✅ Hydra service: ftp (detected from banner)")
         return "hydra:ftp"
     elif 'telnet' in banner or 'telnet' in product:
@@ -122,34 +123,22 @@ def detect_service_advanced(target):
         print(f"      ✅ Hydra service: mssql (detected from banner)")
         return "hydra:mssql"
     
-    # Si no se puede detectar un servicio específico
+    # No compatible service found
     print(f"      ❌ No compatible service found for port {port}")
     return None
 
 def get_common_failure_messages():
-    """Return common failure messages for different languages."""
+    """Return common authentication failure messages in multiple languages."""
     return [
         # English
-        "Login failed",
-        "Invalid username or password", 
-        "Incorrect username or password",
-        "Authentication failed",
-        "Access denied",
-        "Invalid login",
-        "Wrong credentials",
-        "Bad username or password",
-        "Login error",
+        "Login failed", "Invalid username or password", "Incorrect username or password",
+        "Authentication failed", "Access denied", "Invalid login", "Wrong credentials",
+        "Bad username or password", "Login error",
         
         # Spanish  
-        "Usuario o contraseña incorrectos",
-        "Credenciales incorrectas",
-        "Error de autenticación",
-        "Acceso denegado",
-        "Login fallido",
+        "Usuario o contraseña incorrectos", "Credenciales incorrectas",
+        "Error de autenticación", "Acceso denegado", "Login fallido",
         
-        # Other common patterns
-        "Error",
-        "Failed",
-        "Invalid",
-        "Incorrect"
+        # Common patterns
+        "Error", "Failed", "Invalid", "Incorrect"
     ]

@@ -34,7 +34,7 @@ class OutputLogger:
                 print(f"❌ Error creating log file: {e}")
                 self.save_output = False
         
-        # Redirect stdout
+        # Redirect stdout if logging is enabled
         if self.save_output and self.log_file:
             sys.stdout = self
     

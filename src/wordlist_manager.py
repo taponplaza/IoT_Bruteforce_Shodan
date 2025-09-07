@@ -1,10 +1,10 @@
-"""Wordlist management and recommendations."""
+"""Wordlist management and recommendations for brute force attacks."""
 
 # Importar las constantes del config_manager
 from config_manager import WORDLISTS
 
 def select_wordlist():
-    """Allow user to select a wordlist for brute force attacks - EXACTO del original."""
+    """Allow user to select a wordlist for brute force attacks."""
     print("\n" + "="*60)
     print("WORDLIST SELECTION")
     print("="*60)
@@ -24,7 +24,7 @@ def select_wordlist():
         print(f"   📝 {description}")
         print(f"   👤 {username_count} usernames | 🔑 {password_count} passwords | 🎯 {total_combinations} combinations")
         
-        # Show status based on combination count
+        # Show security assessment
         if total_combinations <= 50:
             print(f"   ✅ Conservative approach - Low detection risk")
         elif total_combinations <= 80:
@@ -59,7 +59,7 @@ def select_wordlist():
         except ValueError:
             print("Invalid input. Please enter a number.")
     
-    # Apply safety limit
+    # Apply safety limit (max 100 combinations)
     usernames = selected_wordlist["usernames"]
     passwords = selected_wordlist["passwords"]
     total_combinations = len(usernames) * len(passwords)
@@ -86,7 +86,7 @@ def select_wordlist():
     return usernames, passwords, selected_wordlist['name']
 
 def create_custom_wordlist():
-    """Create a custom wordlist interactively - EXACTO del original."""
+    """Create a custom wordlist interactively."""
     print("\n=== Custom Wordlist Creation ===")
     print("📝 Define your own username and password lists")
     print("⚠️  Remember: Total combinations should not exceed 100")
@@ -150,17 +150,16 @@ def create_custom_wordlist():
     }
 
 def show_wordlist_recommendations(targets):
-    """Analyze targets and recommend best wordlist - EXACTO del original."""
+    """Analyze targets and recommend best wordlist based on detected services."""
     print("\n🤖 WORDLIST RECOMMENDATIONS")
     print("="*50)
     
     # Analyze target characteristics
     service_types = {}
     products = {}
-    ports = {}
     
     for target in targets:
-        # Service analysis
+        # Service analysis by port
         port = target['port']
         if port in [502, 1911, 20000, 44818, 102, 2404]:
             service_types['ics'] = service_types.get('ics', 0) + 1
@@ -184,22 +183,19 @@ def show_wordlist_recommendations(targets):
     # Generate recommendations
     recommendations = []
     
-    # ICS/SCADA systems
+    # Check each category
     ics_count = service_types.get('ics', 0) + products.get('ics', 0)
     if ics_count > 0:
         recommendations.append((2, f"🏭 ICS/SCADA Systems - {ics_count} devices detected"))
     
-    # Cameras
     camera_count = service_types.get('camera', 0) + products.get('camera', 0)
     if camera_count > 0:
         recommendations.append((3, f"📹 IP Cameras - {camera_count} devices detected"))
     
-    # Remote access
     remote_count = service_types.get('remote', 0)
     if remote_count > 0:
         recommendations.append((4, f"🔐 Remote Access - {remote_count} devices detected"))
     
-    # Network equipment
     network_count = products.get('network', 0)
     if network_count > 0:
         recommendations.append((5, f"🌐 Network Equipment - {network_count} devices detected"))
